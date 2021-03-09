@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.ALLOWED_TYPES=exports.DEFAULT_ACTION=exports.DEFAULT_TYPE=void 0;var DEFAULT_TYPE="api";exports.DEFAULT_TYPE="api";var DEFAULT_ACTION="/loginViaQr";exports.DEFAULT_ACTION="/loginViaQr";var ALLOWED_TYPES=["api","app","add","fetch"];exports.ALLOWED_TYPES=ALLOWED_TYPES;

@@ -340,6 +340,115 @@ https://.../?...&f=alternateName,bap[over21]
 
 See the [BAP documentation](https://github.com/icellan/bap) for further information about BAP identities and attestations.
 
+## Working with the HeimdalId class
+
+A helper class, written in Javascript is available in this repository (https://github.com/icellan/heimdal-id).
+
+```shell
+npm install --save heimdal-id
+```
+
+Creating a new login QR:
+```javascript
+import { HeimdalId } from 'heimdal-id';
+
+// bitcoin private key in WIF format
+// This is used as authentication on the server side and should never be shared
+const privateKey = '5JXgKbCBV9sarnZ2iVGAECTeaXDopVKVHRrphJ87tKD7pcZECHr';
+const serverDomain = "demo.heimdal.app";
+
+const heimdal = new HeimdalId(privateKey);
+heimdal.newRequest(serverDomain);
+heimdal.setAction('/api/v1/loginViaQr');
+heimdal.addField('name');
+heimdal.addField('email');
+
+const loginQrCode = heimdal.getSignedRequest();
+// this returns something like this
+// heimdal://demo.heimdal.app/x56SPWkndQ7u-WeofG6-hFNlF-SJSXDX?t=api&a=/api/v1/loginViaQr&f=name,email&sig=Gw8ZATaUidOTnjT55gc5Zl1KMOdzTMRG5pDsaUaalrxVK2r3yJK2ryeLtyMNYx4MRTJYHo8Buag0G88Xs8bLawk%3D&id=1HiYg2CCSVM2zC2z9cvnVTLY3norrnQh1f
+```
+
+This login code can be presented to the user on a QR code for scanning and creating a login response. The login response will be POST'ed to `https://demo.heimdal.app/api/v1/loginViaQr` in this case.
+
+Reacting to a login request in a Heimdal client:
+```javascript
+const qrCode = 'heimdal://demo.heimdal.app/...';
+const privateKey = '<personal private key>';
+const heimdal = new HeimdalId(privateKey);
+heimdal.requestFromUrl(qrCode); // qrCode is the uri presented on the QR code
+
+const fields = heimdal.getFields();
+// OR heimdal.getCleanFields() - to get field names without the trailing '*', signifying an optional field
+const fieldValues = {};
+// ... populate the fields with the correct values
+
+const heimdalResponse = heimdal.createResponse(fieldValues);
+const responseUrl = heimdalResponse.getResponseUrl();
+const responseBody = heimdalResponse.getResponseBody();
+const request = {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify(responseBody),
+};
+fetch(responseUrl, request).then((response) => { ... });
+```
+
+If the private key and signing are done by a third party application, or wallet:
+```javascript
+const mySigningFunction = function (message) {
+  // ... the function that does the signing
+  return { address, signature };
+}
+
+const qrCode = 'heimdal://demo.heimdal.app/...';
+const heimdal = new HeimdalId();
+heimdal.requestFromUrl(qrCode); // qrCode is the uri presented on the QR code
+
+const fields = heimdal.getFields();
+const fieldValues = {};
+// ... populate the fields with the correct values
+
+const heimdalResponse = heimdal.createResponse(fieldValues);
+
+// sign the data
+const signingMessage = heimdalResponse.getSigningMessage();
+const { address, signature } = mySigningFunction(signingMessage);
+heimdalResponse.address = address;
+heimdalResponse.signature = signature;
+
+const responseUrl = heimdalResponse.getResponseUrl();
+const responseBody = heimdalResponse.getResponseBody();
+const request = {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify(responseBody),
+};
+fetch(responseUrl, request).then((response) => { ... });
+```
+
+
+Verifying a login response on a receiving server:
+```javascript
+const serverUrl = "https://demo.heimdal.app";
+
+const heimdal = new HeimdalId();
+// responseBody is the json object of the body of the sent response
+// In NodeJs: req.body after using the bodyParser.json()
+const heimdalResponse = heimdal.newResponse(serverUrl, responseBody);
+if (heimdalResponse.isValid()) {
+  //
+  // ... do the login of the user. The login, including signature, has been verified
+  //
+  const address = heimdalResponse.getId();
+  const fields = heimdalResponse.getFields();
+  const challenge = heimdalResponse.getChallenge();
+}
+```
+
 ## On login keys
 
 Any Heimdal application will need to take care of creating the deterministic keys that are needed for the user to log in to various sites. These keys should not be re-used across sites, both for security, but also for privacy reasons. A method should be used to deterministically generate a different key pair for each site visited.

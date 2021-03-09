@@ -1,5 +1,7 @@
 import moment from 'moment';
 import Message from 'bsv/message';
+import { jsonStableStringify } from './utils';
+import { DEFAULT_ACTION } from './constants';
 
 /**
  * Heimdal response
@@ -7,13 +9,17 @@ import Message from 'bsv/message';
  * @type {HeimdalResponse}
  */
 export const HeimdalResponse = class {
-  constructor(serverUrl, responseObject) {
+  constructor(serverUrl, responseObject, action = false) {
+    // remove trailing slash if added by accident
+    serverUrl = serverUrl.replace(/\/+$/, '');
+
     const {
       challenge,
       time,
       address,
       signature,
       fields,
+      bap,
     } = responseObject;
 
     this.serverUrl = serverUrl;
@@ -22,6 +28,11 @@ export const HeimdalResponse = class {
     this.address = address;
     this.signature = signature;
     this.fields = fields || [];
+
+    this.bap = bap || [];
+
+    // we need this from the heimdal object to create the response url
+    this.action = action || DEFAULT_ACTION;
 
     this.errors = [];
   }
@@ -49,8 +60,7 @@ export const HeimdalResponse = class {
 
     // check the signature from this user and validate the public key
     // server url includes the protocol, but not the trailing slash - https://demo.heimdal.app
-    const message = this.serverUrl + this.challenge + '&time=' + this.time;
-    const messageBuffer = Buffer.from(message);
+    const messageBuffer = Buffer.from(this.getSigningMessage());
     try {
       if (!Message.verify(messageBuffer, this.address, this.signature)) {
         this.errors.push('Could not verify signature');
@@ -62,6 +72,39 @@ export const HeimdalResponse = class {
     }
 
     return true;
+  }
+
+  getSigningMessage() {
+    let signingMessage = this.serverUrl
+      + '/'
+      + this.challenge
+      + '?time=' + this.time
+      + '&f=' + encodeURIComponent(jsonStableStringify(this.fields));
+
+    if (this.bap) {
+      signingMessage += '&bap=' + encodeURIComponent(jsonStableStringify(this.bap));
+    }
+
+    return signingMessage;
+  }
+
+  getResponseUrl() {
+    return `${this.serverUrl}${this.action}`;
+  }
+
+  getResponseBody() {
+    if (!this.challenge || !this.time || !this.address || !this.signature) {
+      this.errors.push('Missing one of the required fields');
+      return false;
+    }
+
+    return {
+      challenge: this.challenge,
+      time: this.time,
+      address: this.address,
+      signature: this.signature,
+      fields: this.fields,
+    };
   }
 
   getId() {

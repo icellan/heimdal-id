@@ -1,11 +1,9 @@
 import bsv from 'bsv';
 import Message from 'bsv/message';
+import moment from 'moment';
 import { HeimdalResponse } from './response';
 import { parseUri, Random } from './utils';
-
-const DEFAULT_TYPE = 'api';
-const DEFAULT_ACTION = '/loginViaQr';
-const ALLOWED_TYPES = ['api', 'app', 'add', 'fetch'];
+import { DEFAULT_TYPE, DEFAULT_ACTION, ALLOWED_TYPES } from './constants';
 
 /**
  * Heimdal
@@ -55,7 +53,7 @@ export const HeimdalId = class {
     this.type = DEFAULT_TYPE;
     this.action = DEFAULT_ACTION;
     this.fields = [];
-    this.value = '';
+    this.value = undefined;
     this.extension = '';
 
     this.signature = null;
@@ -74,6 +72,8 @@ export const HeimdalId = class {
     }
     this.resetVariables();
 
+    authority = authority.replace(/^https?:\/\//, ''); // remove protocol if applicable
+    authority = authority.replace(/\/$/, ''); // remove trailing /
     const [host, port] = authority.split(':');
     this.host = host;
     this.port = port;
@@ -94,13 +94,26 @@ export const HeimdalId = class {
     return this.challenge;
   }
 
+  /**
+   * Set the type of response requested, see ALLOWED_TYPES
+   *
+   * @param type
+   */
   setType(type) {
     if (!ALLOWED_TYPES.includes(type)) {
-      throw new Error('This action is not allowed');
+      throw new Error('This type is not allowed');
     }
     this.type = type;
   }
 
+  /**
+   * Set the action to perform when returning the login response
+   *
+   * For web (api) - always add as absolute url (with leading "/")
+   * For mobile (app) - give the name of the intent
+   *
+   * @param action
+   */
   setAction(action) {
     this.action = action;
   }
@@ -116,6 +129,58 @@ export const HeimdalId = class {
 
   addField(fieldName) {
     this.fields.push(fieldName);
+  }
+
+  addFields(fields) {
+    fields.forEach((fieldName) => {
+      if (!this.fields.includes(fieldName)) {
+        this.fields.push(fieldName);
+      }
+    });
+  }
+
+  getFields() {
+    return this.fields || [];
+  }
+
+  /**
+   * This function cleans the fields of any /\*$/ present, indicating an optional field
+   * @returns {[]}
+   */
+  getCleanFields() {
+    return this.getFields().map((f) => { return f.replace('*', ''); });
+  }
+
+  setFields(fields) {
+    this.fields = Array.isArray(fields) ? fields : [];
+  }
+
+  getValue() {
+    return this.value;
+  }
+
+  getAction() {
+    return this.action || '/loginViaQr';
+  }
+
+  getType() {
+    return this.type || 'api';
+  }
+
+  getAuthority() {
+    return this.authority || '';
+  }
+
+  getServerUrl() {
+    return 'https://' + this.authority;
+  }
+
+  getId() {
+    return this.id || null;
+  }
+
+  getSignature() {
+    return this.signature || null;
   }
 
   /**
@@ -199,8 +264,22 @@ export const HeimdalId = class {
     return request;
   }
 
-  fromUrl(url) {
+  requestFromUrl(url) {
+    // check url for illegal characters - stop processing if found
+    // https://tc39.es/ecma262/#sec-encodeuricomponent-uricomponent
+    if (!url.match(/^[;,/?:@&=+$-_.!~*'%()a-z0-9]+$/)) {
+      throw new Error('Illegal characters found in QR Code');
+    }
+
     const parsedUrl = parseUri(url);
+
+    if (!parsedUrl.protocol || parsedUrl.protocol !== 'heimdal') {
+      throw new Error('Not a valid protocol for Heimdal');
+    }
+    if (!parsedUrl.authority) {
+      throw new Error('Domain authority could not be parsed');
+    }
+
     this.checksum = this.getChecksum(url);
 
     this.source = parsedUrl.source;
@@ -213,7 +292,7 @@ export const HeimdalId = class {
 
     if (this.parameters.t) this.type = this.parameters.t;
     if (this.parameters.a) this.action = decodeURIComponent(this.parameters.a);
-    if (this.parameters.v) this.action = decodeURIComponent(this.parameters.v);
+    if (this.parameters.v) this.value = decodeURIComponent(this.parameters.v);
 
     if (this.parameters.id) this.id = this.parameters.id;
     if (this.parameters.sig) this.signature = decodeURIComponent(this.parameters.sig);
@@ -239,9 +318,34 @@ export const HeimdalId = class {
    *
    * @param serverUrl
    * @param responseObject
+   * @param action
    */
-  newResponse(serverUrl, responseObject) {
-    return new HeimdalResponse(serverUrl, responseObject);
+  newResponse(serverUrl, responseObject, action = false) {
+    return new HeimdalResponse(serverUrl, responseObject, action || this.action);
+  }
+
+  /**
+   * Create a new response object from the loaded parameters
+   *
+   * This can be used to send a response back to a server for verification for a login
+   *
+   * @param fields {array}
+   */
+  createResponse(fields) {
+    const response = new HeimdalResponse(this.getServerUrl(), {
+      challenge: this.getChallenge(),
+      time: moment().unix(),
+      fields,
+    }, this.action);
+
+    if (this.#privateKey) {
+      // create a signature from the loaded private key
+      const message = response.getSigningMessage();
+      response.signature = this.signMessage(message);
+      response.address = this.getAddress();
+    }
+
+    return response;
   }
 
   /**
@@ -261,6 +365,13 @@ export const HeimdalId = class {
   }
 
   getSigningMessage() {
+    if (!this.authority) {
+      throw new Error('Domain authority has not been set');
+    }
+    if (!this.challenge) {
+      throw new Error('Challenge key has not been set');
+    }
+
     const fields = this.fields.map((f) => {
       return encodeURIComponent(f);
     });
@@ -283,8 +394,7 @@ export const HeimdalId = class {
    * @param message
    */
   signMessage(message) {
-    return Message(Buffer.from(message))
-      .sign(this.#privateKey);
+    return Message(Buffer.from(message)).sign(this.#privateKey);
   }
 
   /**
