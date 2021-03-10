@@ -1,17 +1,3 @@
-import cryptoRandomString from 'crypto-random-string';
-
-export const Random = {
-  secret(length = 32) {
-    return cryptoRandomString({
-      length,
-      type: 'url-safe',
-    });
-  },
-  hexString(length = 32) {
-    return cryptoRandomString({ length });
-  },
-};
-
 // parseUri 1.2.2
 // (c) Steven Levithan <stevenlevithan.com>
 // MIT License

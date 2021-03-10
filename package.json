@@ -1,6 +1,6 @@
 {
   "name": "heimdal-id",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Heimdal ID",
   "repository": {
     "type": "git",
@@ -48,8 +48,8 @@
     "run-sequence": "2.2.1"
   },
   "dependencies": {
+    "base64url": "^3.0.1",
     "bsv": "^1.5.4",
-    "crypto-random-string": "^3.3.1",
     "moment": "^2.29.1"
   },
   "jest": {

@@ -2,7 +2,8 @@ import bsv from 'bsv';
 import Message from 'bsv/message';
 import moment from 'moment';
 import { HeimdalResponse } from './response';
-import { parseUri, Random } from './utils';
+import { Random } from './random';
+import { parseUri } from './utils';
 import { DEFAULT_TYPE, DEFAULT_ACTION, ALLOWED_TYPES } from './constants';
 
 /**
