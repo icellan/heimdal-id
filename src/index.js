@@ -291,9 +291,9 @@ export const HeimdalId = class {
     this.challenge = parsedUrl.path.substr(1);
     this.parameters = parsedUrl.queryKey;
 
-    // type and action should always have a value
-    this.type = this.parameters.t || DEFAULT_TYPE;
-    this.action = this.parameters.a ? decodeURIComponent(this.parameters.a) : DEFAULT_ACTION;
+    // type and action should always reflect the url that was posted
+    this.type = this.parameters.t || '';
+    this.action = this.parameters.a || '';
 
     if (this.parameters.hasOwnProperty('v')) this.value = decodeURIComponent(this.parameters.v);
     if (this.parameters.id) this.id = this.parameters.id;
@@ -323,7 +323,7 @@ export const HeimdalId = class {
    * @param action
    */
   newResponse(serverUrl, responseObject, action = false) {
-    return new HeimdalResponse(serverUrl, responseObject, action || this.action);
+    return new HeimdalResponse(serverUrl, responseObject, action || this.action || DEFAULT_ACTION);
   }
 
   /**
@@ -338,7 +338,7 @@ export const HeimdalId = class {
       challenge: this.getChallenge(),
       time: moment().unix(),
       fields,
-    }, this.action);
+    }, this.action || DEFAULT_ACTION);
 
     if (this.#privateKey) {
       // create a signature from the loaded private key
@@ -383,8 +383,8 @@ export const HeimdalId = class {
       + this.authority
       + '/'
       + this.challenge
-      + '?t=' + this.type
-      + '&a=' + this.action
+      + '?t=' + (this.type || DEFAULT_TYPE)
+      + '&a=' + (this.action || DEFAULT_ACTION)
       + '&f=' + fields.join(',')
       + '&v=' + (this.value || '')
       + '&x=' + (this.extension || '');
