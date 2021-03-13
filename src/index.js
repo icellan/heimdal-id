@@ -4,7 +4,12 @@ import moment from 'moment';
 import { HeimdalResponse } from './response';
 import { Random } from './random';
 import { parseUri } from './utils';
-import { DEFAULT_TYPE, DEFAULT_ACTION, ALLOWED_TYPES } from './constants';
+import {
+  DEFAULT_TYPE,
+  DEFAULT_ACTION,
+  ALLOWED_TYPES,
+  AIP_BITCOM_ADDRESS,
+} from './constants';
 
 /**
  * Heimdal
@@ -56,6 +61,8 @@ export const HeimdalId = class {
     this.fields = [];
     this.value = undefined;
     this.extension = '';
+
+    this.signData = '';
 
     this.signature = null;
     this.id = null;
@@ -182,6 +189,14 @@ export const HeimdalId = class {
 
   getSignature() {
     return this.signature || null;
+  }
+
+  getSigningData() {
+    return this.signData || null;
+  }
+
+  setSigningData(signData) {
+    this.signData = signData;
   }
 
   /**
@@ -345,6 +360,10 @@ export const HeimdalId = class {
       const message = response.getSigningMessage();
       response.signature = this.signMessage(message);
       response.address = this.getAddress();
+
+      if (this.signData) {
+        response.signed = this.getSignedData();
+      }
     }
 
     return response;
@@ -391,12 +410,94 @@ export const HeimdalId = class {
   }
 
   /**
+   * Sign the set signData with the correct function
+   */
+  getSignedData() {
+    if (this.signData.message) {
+      return {
+        message: this.signData.message,
+        signature: this.signMessage(this.signData.message),
+        address: this.#address,
+      };
+    }
+
+    if (this.signData.op_return) {
+      return {
+        algorithm: 'AIP',
+        op_return: this.signOpReturn(this.signData.op_return),
+      };
+    }
+
+    if (this.signData.tx) {
+      return this.signTx(this.signData.tx);
+    }
+
+    return false;
+  }
+
+  /**
+   * Sign the given op return data array
+   *
+   * @param opReturn
+   */
+  signOpReturn(opReturn) {
+    const aipMessageBuffer = this.getAIPMessageBuffer(opReturn);
+    const {
+      address,
+      signature,
+    } = this.signMessage(aipMessageBuffer);
+
+    return opReturn.concat([
+      Buffer.from('|').toString('hex'),
+      Buffer.from(AIP_BITCOM_ADDRESS).toString('hex'),
+      Buffer.from('BITCOIN_ECDSA').toString('hex'),
+      Buffer.from(address).toString('hex'),
+      Buffer.from(signature, 'base64').toString('hex'),
+    ]);
+  }
+
+  /**
+   * get Message buffer for AIP
+   *
+   * @param opReturn
+   * @returns {Buffer}
+   */
+  getAIPMessageBuffer(opReturn) {
+    const buffers = [];
+    if (opReturn[0].replace('0x', '') !== '6a') {
+      // include OP_RETURN in constructing the signature buffer
+      buffers.push(Buffer.from('6a', 'hex'));
+    }
+    opReturn.forEach((op) => {
+      buffers.push(Buffer.from(op.replace('0x', ''), 'hex'));
+    });
+    // add a trailing "|" - this is the AIP way
+    buffers.push(Buffer.from('|'));
+
+    return Buffer.concat([...buffers]);
+  }
+
+  /**
+   * Sign the given Bitcoin transaction
+   *
+   * @param tx
+   */
+  signTx(tx) {
+    // TODO
+    console.log(tx);
+    // const transaction = bsv.Transaction.fromString(tx);
+
+    return false;
+  }
+
+  /**
    * Sign a message with the private key of this instance
    *
    * @param message
    */
   signMessage(message) {
-    return Message(Buffer.from(message)).sign(this.#privateKey);
+    const messageBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message);
+    return Message(messageBuffer).sign(this.#privateKey);
   }
 
   /**

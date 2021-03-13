@@ -11,6 +11,11 @@ Heimdal also optionally allows a website to request information from the user wh
 
 Heimdal apps that support the BAP extension will also be able to share attested attributes, like third party KYC checks, which can be verified on the Bitcoin blockchain by any third party.
 
+> Check out the demo site at https://demo.heimdal.app/ for a working version of the server side of the login.
+> Source is available at https://github.com/icellan/app.heimdal.demo
+
+> BAP can be found at https://github.com/icellan/bap
+
 ## Logging in
 
 A user is presented with a QR code and a checksum, for simple visual validation by the user, with the following link:
@@ -242,6 +247,57 @@ The site now always has to sign any request to the client, using the same key pa
 
 **NOTE: Make sure the values in the URL are encoded correctly to be able to be picked up by the Heimdal application. You can, for instance, use `encodeURIComponent` for this in Javascript.**
 
+## Signing data / messages
+
+Data signing should always be initiated by a fetch call, which tells the client to fetch the data via a http request. This does not limit the amount of data being signed, and allows for better handling of non url-safe characters.
+
+```
+heimdal://demo.heimdal.app/...?t=fetch&a=/api/v1/dataForSigning&sig=...&id=...
+```
+
+The data signing fetch response should include all the information needed for the client to initiate the signing process.
+
+```json
+{
+  "t": "sign",
+  "a": "/api/v1/signedData" || "broadcast",
+  "sig": "<...>",
+  "id": "1HJshh5r2e63CmL1wtvDBrncLVD9bbpXwS",
+  "sign": {
+    "message": "Sign this message",
+    "tx": "Serialized transaction hex",
+    "op_return": {
+      "algorithm": "AIP",
+      "data": [...opReturn hex array]
+    }
+  }
+}
+```
+
+When `a` is set to `broadcast`, the Heimdal client should broadcast the transaction directly to the Bitcoin network. This means that the Heimdal client must have access to utxos to pay for the Bitcoin transaction.
+
+| Parameter | Description                                            | Used signing algorithm                            |
+| --------- | -------------------------------------------------------| ------------------------------------------------- |
+| message   | A text message to sign                                 | `BitcoinMessage`                                  |
+| tx        | A serialized Bitcoin transaction in hex                | `Bitcoin`                                         |
+| op_return | An object describing how to sign the op_return data    | `AIP`, `PSP` or `HAIP`                            |
+
+The Heimdal client should try to give as much information about the data being signed as possible.
+
+When the signed data is returned to the requesting server, it should follow the Heimdal protocol, with the addition of the `signed` attribute for the signed data.
+
+```json
+{
+  "challenge": "F8mkHwQu8-B8SClgugXBY1hTsWhS6casjbNLjGTShYSBXItuVLNbJ1_NWCtNlw05",
+  "time": 1231006505,
+  "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+  "signature": "<...>",
+  "signed": {
+    "op_return": [...opReturn]
+  }
+}
+```
+
 ## Hardening the login procedure
 
 Instead of relying only on the key pairs for authenticating users, it is also possible for a website to require the user to register an account before logging in with Heimdal. Subsequently, when the user is logging in, the user firsts needs to fill in a username, after which he is presented with a QR code for scanning. The site has linked the QR code (and the challenge) to the user account and now only accepts a login attempt from that user, using the keys on file.
@@ -256,23 +312,28 @@ The procedure for this would be exactly the same as the login procedure. On the 
 
 ## Query parameters in requests
 
-| Parameter | Name       | Description                                    |
-| --------- | ---------- | ---------------------------------------------- |
-| t         | type       | Type of request (`api`, `app`, `add`, `fetch`) |
-| a         | action     | What url / applicationId to call as resonse    |
-| f         | fields     | The fields to include in the response          |
-| x         | extension  | The Heimdal extension to use for the request   |
-| sig       | signature  | Verification signature of the site             |
-| id        | id address | Address corresponding to the site signature    |
+All parameters are optional. The defaults for `type` and `action` will be added automatically when signing.
+
+| Parameter | Name       | Description                                                          |
+| --------- | ---------- | -------------------------------------------------------------------- |
+| t         | type       | Type of request (`api` (default), `app`, `add`, `fetch`, `sign`)     |
+| a         | action     | What url / applicationId to call as response (default `/loginViaQr`) |
+| f         | fields     | The fields to include in the response (comma separated list)         |
+| x         | extension  | The Heimdal extension to use for the request                         |
+| v         | value      | The value of the field being set, when doing a request of type `add` |
+| sig       | signature  | Verification signature of the site                                   |
+| id        | id address | Address corresponding to the site signature                          |
+| sign      | signing    | A JSON object of the parameters for signing                          |
 
 Type of request:
 
-| Type   | Description                                                                                             |
-| ------ | ------------------------------------------------------------------------------------------------------- |
-| api    | A request to an api endpoint, given in `a` should be done with the response data                        |
-| app    | An internal app link should be called ([`a`]://...) with the response data                              |
-| add    | Data is being added to the profile of the user / No response required.                                  |
-| fetch  | A fetch request should be done to get the data for this request. Should be used for very large requests |
+| Type    | Description                                                                                             |
+| -------  | ------------------------------------------------------------------------------------------------------- |
+| api     | A request to an api endpoint, given in `a` should be done with the response data                        |
+| app     | An internal app link should be called ([`a`]://...) with the response data                              |
+| add     | Data is being added to the profile of the user / No response required.                                  |
+| fetch   | A fetch request should be done to get the data for this request. Should be used for very large requests |
+| sign    | Sign a piece of data. The data can either be a string, an OP_RETURN array or a Bitcoin transaction      |
 
 ## Working with verified identities and attributes
 
@@ -383,6 +444,7 @@ const fieldValues = {};
 // ... populate the fields with the correct values
 
 const heimdalResponse = heimdal.createResponse(fieldValues);
+// the url will be automatically signed, since the private key was given during initialization
 const responseUrl = heimdalResponse.getResponseUrl();
 const responseBody = heimdalResponse.getResponseBody();
 const request = {
@@ -412,11 +474,10 @@ const fieldValues = {};
 
 const heimdalResponse = heimdal.createResponse(fieldValues);
 
-// sign the data
+// signingMessage is the message string that needs to be signed by the user
 const signingMessage = heimdalResponse.getSigningMessage();
 const { address, signature } = mySigningFunction(signingMessage);
-heimdalResponse.address = address;
-heimdalResponse.signature = signature;
+heimdalResponse.setSignature(address, signature);
 
 const responseUrl = heimdalResponse.getResponseUrl();
 const responseBody = heimdalResponse.getResponseBody();

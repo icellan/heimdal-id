@@ -29,6 +29,8 @@ export const HeimdalResponse = class {
     this.signature = signature;
     this.fields = fields || [];
 
+    this.signed = null;
+
     this.bap = bap || [];
 
     // we need this from the heimdal object to create the response url
@@ -88,6 +90,11 @@ export const HeimdalResponse = class {
     return signingMessage;
   }
 
+  setSignature(address, signature) {
+    this.address = address;
+    this.signature = signature;
+  }
+
   getResponseUrl() {
     return `${this.serverUrl}${this.action}`;
   }
@@ -98,13 +105,19 @@ export const HeimdalResponse = class {
       return false;
     }
 
-    return {
+    const responseBody = {
       challenge: this.challenge,
       time: this.time,
       address: this.address,
       signature: this.signature,
       fields: this.fields,
     };
+
+    if (this.signed) {
+      responseBody.signed = this.signed;
+    }
+
+    return responseBody;
   }
 
   getId() {
