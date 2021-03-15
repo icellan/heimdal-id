@@ -73,21 +73,37 @@ export const HeimdalResponse = class {
       return false;
     }
 
+    if (this.bap && this.bap.length) {
+      try {
+        // BAP uses the same message for signing as the normal request
+        if (!Message.verify(messageBuffer, this.bap.address, this.bap.signature)) {
+          this.errors.push('Could not verify BAP signature');
+          return false;
+        }
+      } catch (e) {
+        this.errors.push('Could not verify BAP signature');
+        return false;
+      }
+    }
+
     return true;
   }
 
+  /**
+   * Get the string message to sign for the verification
+   *
+   * This does not include the BAP data, as BAP also needs to include a signature of the data to be
+   * validated (using this function), which creates a circular dependency. BAP is signed separately
+   * and all the BAP data can be verified with on chain attestations.
+   *
+   * @returns {string}
+   */
   getSigningMessage() {
-    let signingMessage = this.serverUrl
+    return this.serverUrl
       + '/'
       + this.challenge
       + '?time=' + this.time
       + '&f=' + encodeURIComponent(jsonStableStringify(this.fields));
-
-    if (this.bap) {
-      signingMessage += '&bap=' + encodeURIComponent(jsonStableStringify(this.bap));
-    }
-
-    return signingMessage;
   }
 
   setSignature(address, signature) {
@@ -112,6 +128,10 @@ export const HeimdalResponse = class {
       signature: this.signature,
       fields: this.fields,
     };
+
+    if (this.bap) {
+      responseBody.bap = this.bap;
+    }
 
     if (this.signed) {
       responseBody.signed = this.signed;

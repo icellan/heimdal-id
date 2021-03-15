@@ -355,6 +355,7 @@ describe('responses', () => {
     delete responseOjectTest.signature;
     expect(responseOjectTest).toStrictEqual({
       address,
+      bap: [],
       challenge: 'testChallenge',
       fields: {
         email: 'test@example.com',
