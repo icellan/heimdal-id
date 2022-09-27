@@ -1,7 +1,9 @@
 import moment from 'moment';
+// @ts-ignore
 import Message from 'bsv/message';
 import { jsonStableStringify } from './utils';
 import { DEFAULT_ACTION } from './constants';
+import { ResponseBody } from "./interface";
 
 /**
  * Heimdal response
@@ -9,7 +11,19 @@ import { DEFAULT_ACTION } from './constants';
  * @type {HeimdalResponse}
  */
 export const HeimdalResponse = class {
-  constructor(serverUrl, responseObject, action = false) {
+  serverUrl: string;
+  challenge: string;
+  time: number;
+  address: string;
+  signature: string;
+  fields: {[key: string]: string | number};
+  action: string;
+
+  errors: any;
+  signed: any;
+  bap: any;
+
+  constructor(serverUrl: string, responseObject: any, action = '') {
     // remove trailing slash if added by accident
     serverUrl = serverUrl.replace(/\/+$/, '');
 
@@ -39,7 +53,7 @@ export const HeimdalResponse = class {
     this.errors = [];
   }
 
-  isValid() {
+  isValid(): boolean {
     // pre-check
     if (!this.serverUrl || !this.challenge || !this.time || !this.address || !this.signature) {
       this.errors.push('Not all fields are filled in');
@@ -98,30 +112,31 @@ export const HeimdalResponse = class {
    *
    * @returns {string}
    */
-  getSigningMessage() {
+  getSigningMessage(): string {
     return this.serverUrl
       + '/'
       + this.challenge
       + '?time=' + this.time
+      // @ts-ignore
       + '&f=' + encodeURIComponent(jsonStableStringify(this.fields));
   }
 
-  setSignature(address, signature) {
+  setSignature(address: string, signature: string): void {
     this.address = address;
     this.signature = signature;
   }
 
-  getResponseUrl() {
+  getResponseUrl(): string {
     return `${this.serverUrl}${this.action}`;
   }
 
-  getResponseBody() {
+  getResponseBody(): ResponseBody | null {
     if (!this.challenge || !this.time || !this.address || !this.signature) {
       this.errors.push('Missing one of the required fields');
-      return false;
+      return null;
     }
 
-    const responseBody = {
+    const responseBody: ResponseBody = {
       challenge: this.challenge,
       time: this.time,
       address: this.address,
@@ -140,27 +155,27 @@ export const HeimdalResponse = class {
     return responseBody;
   }
 
-  getId() {
+  getId(): string {
     return this.address;
   }
 
-  getChallenge() {
+  getChallenge(): string {
     return this.challenge;
   }
 
-  getFields() {
+  getFields(): { [key: string]: string | number } {
     return this.fields;
   }
 
-  getFieldValue(fieldName) {
+  getFieldValue(fieldName: string): string | number | undefined {
     return this.fields[fieldName];
   }
 
-  setFieldValue(fieldName, fieldValue) {
+  setFieldValue(fieldName: string, fieldValue: string | number): void {
     this.fields[fieldName] = fieldValue;
   }
 
-  getVerifiedField(fieldName) {
+  getVerifiedField(fieldName: string): any | undefined {
     const verifiedFields = this.bap?.attributes;
     if (verifiedFields) {
       return verifiedFields[fieldName];
@@ -169,7 +184,7 @@ export const HeimdalResponse = class {
     return undefined;
   }
 
-  getVerifiedFieldValue(fieldName) {
+  getVerifiedFieldValue(fieldName: string): string | number | undefined {
     const field = this.getVerifiedField(fieldName);
     if (field) {
       return field?.value;
@@ -177,7 +192,7 @@ export const HeimdalResponse = class {
     return undefined;
   }
 
-  getVerifiedFieldNonce(fieldName) {
+  getVerifiedFieldNonce(fieldName: string): string | undefined {
     const field = this.getVerifiedField(fieldName);
     if (field) {
       return field?.nonce;

@@ -5,14 +5,14 @@ describe('parseUri', () => {
   test('heimdal uri', () => {
     const parsed = parseUri('heimdal://demo.heimdal.app/test?t=api&a=/api/v1/loginViaQr&f=name,email,%23employeeId');
     expect(parsed).toStrictEqual({
-        anchor: '',
+        anchor: undefined,
         authority: 'demo.heimdal.app',
         directory: '/test',
         file: '',
         host: 'demo.heimdal.app',
-        password: '',
+        password: undefined,
         path: '/test',
-        port: '',
+        port: undefined,
         protocol: 'heimdal',
         query: 't=api&a=/api/v1/loginViaQr&f=name,email,%23employeeId',
         queryKey: {
@@ -22,8 +22,8 @@ describe('parseUri', () => {
         },
         relative: '/test?t=api&a=/api/v1/loginViaQr&f=name,email,%23employeeId',
         source: 'heimdal://demo.heimdal.app/test?t=api&a=/api/v1/loginViaQr&f=name,email,%23employeeId',
-        user: '',
-        userInfo: '',
+        user: undefined,
+        userInfo: undefined,
       });
   });
 });
@@ -47,6 +47,6 @@ describe('jsonStableStringify', () => {
     const s = jsonStableStringify(obj, function (a, b) {
       return a.value < b.value ? 1 : -1;
     });
-    expect(s).toBe('{"d":6,"c":5,"b":[{"z":3,"y":2,"x":1},9],"a":10}');
+    expect(s).toBe('{"a":10,"b":[{"z":3,"y":2,"x":1},9],"d":6,"c":5}');
   });
 });

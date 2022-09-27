@@ -1,5 +1,5 @@
 {
-  "parser": "babel-eslint",
+  "parser": "@typescript-eslint/parser",
   "env": {
     "browser": true,
     "es2021": true,
@@ -10,16 +10,20 @@
     "sourceType": "module",
     "allowImportExportEverywhere": true
   },
-  "extends": "airbnb-base",
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:@typescript-eslint/recommended"
+  ],
   "plugins": [
-    "import"
+    "@typescript-eslint"
   ],
   "rules": {
     "arrow-body-style": ["error", "always"],
     "class-methods-use-this": "off",
     "func-names": "off",
     "max-len": ["error", {
-      "code": 100,
+      "code": 120,
       "ignoreComments": true
     }],
     "prefer-template": "off",
@@ -33,9 +37,10 @@
     "no-underscore-dangle": "off",
     "no-undef": "off",
     "no-useless-escape": "off",
-    "import/no-unresolved": ["error", { "ignore": ["^meteor/"] }],
     "import/extensions": "off",
     "import/no-extraneous-dependencies": "off",
-    "import/prefer-default-export": "off"
+    "import/prefer-default-export": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/ban-ts-comment": "off"
   }
 }

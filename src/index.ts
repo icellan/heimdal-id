@@ -1,6 +1,8 @@
-import bsv from 'bsv';
+import bsv, { Networks } from 'bsv';
+// @ts-ignore
 import Message from 'bsv/message';
 import moment from 'moment';
+
 import { HeimdalResponse } from './response';
 import { Random } from './random';
 import { parseUri } from './utils';
@@ -10,6 +12,7 @@ import {
   ALLOWED_TYPES,
   AIP_BITCOM_ADDRESS,
 } from './constants';
+import { ResponseBody } from "./interface";
 
 /**
  * Heimdal
@@ -17,14 +20,33 @@ import {
  * @type {HeimdalId}
  */
 export const HeimdalId = class {
-  #privateKey = '';
-
+  #privateKey: bsv.PrivateKey | undefined;
   #address = '';
 
-  constructor(privateKey) {
+  source?: string;
+  protocol?: string;
+  host?: string;
+  port?: string | number;
+  authority?: string;
+  challenge?: string;
+  parameters?: { [key: string]: string | number };
+  type?: string;
+  action?: string;
+  fields: string[];
+  value?: string | number;
+  extension?: string;
+  signData?: any;
+  signature?: string;
+  id?: string;
+
+  checksum?: string;
+  errors?: Error[];
+
+  constructor(privateKey?: string) {
     if (privateKey) {
       this.setPrivateKey(privateKey);
     }
+    this.fields = [];
 
     this.resetVariables();
   }
@@ -34,27 +56,26 @@ export const HeimdalId = class {
    *
    * @param privateKey
    */
-  setPrivateKey(privateKey) {
+  setPrivateKey(privateKey: string): void {
     this.#privateKey = bsv.PrivateKey.fromWIF(privateKey);
-    this.#address = this.#privateKey.toAddress()
-      .toString();
+    this.#address = this.#privateKey.toAddress(Networks.mainnet).toString();
   }
 
-  getAddress() {
+  getAddress(): string | undefined {
     return this.#address;
   }
 
   /**
    * Reset all internal variables to their defaults
    */
-  resetVariables() {
+  resetVariables(): void {
     this.source = '';
     this.protocol = 'heimdal';
     this.host = '';
     this.port = '';
     this.authority = '';
     this.challenge = '';
-    this.parameters = [];
+    this.parameters = {};
 
     this.type = DEFAULT_TYPE;
     this.action = DEFAULT_ACTION;
@@ -64,8 +85,8 @@ export const HeimdalId = class {
 
     this.signData = '';
 
-    this.signature = null;
-    this.id = null;
+    this.signature = undefined;
+    this.id = undefined;
 
     this.errors = [];
   }
@@ -74,7 +95,7 @@ export const HeimdalId = class {
    * Start a new Heimdal request
    * @param authority
    */
-  newRequest(authority) {
+  newRequest(authority: string): void {
     if (!authority) {
       throw new Error('Authority is mandatory');
     }
@@ -94,11 +115,11 @@ export const HeimdalId = class {
    *
    * @param challenge
    */
-  setChallenge(challenge) {
+  setChallenge(challenge: string): void {
     this.challenge = challenge;
   }
 
-  getChallenge() {
+  getChallenge(): string | undefined {
     return this.challenge;
   }
 
@@ -107,7 +128,7 @@ export const HeimdalId = class {
    *
    * @param type
    */
-  setType(type) {
+  setType(type: string): void {
     if (!ALLOWED_TYPES.includes(type)) {
       throw new Error('This type is not allowed');
     }
@@ -122,12 +143,13 @@ export const HeimdalId = class {
    *
    * @param action
    */
-  setAction(action) {
+  setAction(action: string): void {
     this.action = action;
   }
 
-  getChecksum(url) {
+  getChecksum(url: string): string {
     const qrHex = bsv.crypto.Hash.sha256(Buffer.from(url));
+    // @ts-ignore
     const address = bsv.PrivateKey.fromHex(qrHex)
       .publicKey
       .toAddress()
@@ -135,11 +157,11 @@ export const HeimdalId = class {
     return `${address.substr(-8, 4)}-${address.substr(-4)}`;
   }
 
-  addField(fieldName) {
+  addField(fieldName: string): void {
     this.fields.push(fieldName);
   }
 
-  addFields(fields) {
+  addFields(fields: string[]): void {
     fields.forEach((fieldName) => {
       if (!this.fields.includes(fieldName)) {
         this.fields.push(fieldName);
@@ -147,31 +169,31 @@ export const HeimdalId = class {
     });
   }
 
-  getFields() {
-    return this.fields || [];
+  getFields(): string[] {
+    return this.fields;
   }
 
   /**
    * This function cleans the fields of any /\*$/ present, indicating an optional field
    * @returns {[]}
    */
-  getCleanFields() {
+  getCleanFields(): string[] {
     return this.getFields().map((f) => { return f.replace('*', ''); });
   }
 
-  setFields(fields) {
+  setFields(fields: string[]): void {
     this.fields = Array.isArray(fields) ? fields : [];
   }
 
-  getValue() {
+  getValue(): string | number | undefined {
     return this.value;
   }
 
-  getAction() {
+  getAction(): string {
     return this.action || '/loginViaQr';
   }
 
-  getType() {
+  getType(): string {
     return this.type || 'api';
   }
 
@@ -179,23 +201,23 @@ export const HeimdalId = class {
     return this.authority || '';
   }
 
-  getServerUrl() {
+  getServerUrl(): string {
     return 'https://' + this.authority;
   }
 
-  getId() {
+  getId(): string | null {
     return this.id || null;
   }
 
-  getSignature() {
+  getSignature(): string | null {
     return this.signature || null;
   }
 
-  getSigningData() {
+  getSigningData(): string | null {
     return this.signData || null;
   }
 
-  setSigningData(signData) {
+  setSigningData(signData: any) {
     this.signData = signData;
   }
 
@@ -207,7 +229,7 @@ export const HeimdalId = class {
    * @param fieldName
    * @param fieldValue
    */
-  addFieldValue(fieldName, fieldValue) {
+  addFieldValue(fieldName: string, fieldValue: string | number | undefined) {
     this.fields = [fieldName];
     this.value = fieldValue;
 
@@ -219,9 +241,11 @@ export const HeimdalId = class {
    * Get the heimdal login url with the set parameters
    *
    * @param short {boolean} Whether to return a url that is as short as possible, with default values
+   *
+   * @throws Error on missing authority ot challenge
    * @returns {string}
    */
-  getRequest(short = false) {
+  getRequest(short = false): string {
     if (!this.authority || !this.challenge) {
       throw new Error('Not initialized properly');
     }
@@ -261,6 +285,8 @@ export const HeimdalId = class {
    * Get a signed request url
    *
    * @param short
+   *
+   * @throws Error on missing private key
    * @returns {string}
    */
   getSignedRequest(short = false) {
@@ -280,7 +306,13 @@ export const HeimdalId = class {
     return request;
   }
 
-  requestFromUrl(url) {
+  /**
+   * Initialize a new request from a url
+   *
+   * @throws Error on illegal characters in url, not a valid Heimdal protocol string, missing authority
+   * @param url
+   */
+  requestFromUrl(url: string): void {
     // check url for illegal characters - stop processing if found
     // https://tc39.es/ecma262/#sec-encodeuricomponent-uricomponent
     if (!url.match(/^[;,/?:@&=+$-_.!~*'%()a-z0-9]+$/)) {
@@ -298,24 +330,26 @@ export const HeimdalId = class {
 
     this.checksum = this.getChecksum(url);
 
-    this.source = parsedUrl.source;
+    this.source = parsedUrl.source as string;
     this.protocol = parsedUrl.protocol;
-    this.host = parsedUrl.host;
+    this.host = parsedUrl.host as string;
     this.port = parsedUrl.port;
-    this.authority = parsedUrl.authority;
-    this.challenge = parsedUrl.path.substr(1);
-    this.parameters = parsedUrl.queryKey;
+    this.authority = parsedUrl.authority as string;
+    const path = parsedUrl.path as string;
+    this.challenge = path?.substr(1);
+    this.parameters = parsedUrl.queryKey as unknown as { [key: string]: string | number };
 
     // type and action should always reflect the url that was posted
-    this.type = this.parameters.t || '';
-    this.action = this.parameters.a || '';
+    this.type = this.parameters?.t as string || '';
+    this.action = this.parameters?.a as string || '';
 
-    if (this.parameters.hasOwnProperty('v')) this.value = decodeURIComponent(this.parameters.v);
-    if (this.parameters.id) this.id = this.parameters.id;
-    if (this.parameters.sig) this.signature = decodeURIComponent(this.parameters.sig);
+    if (this.parameters?.hasOwnProperty('v')) this.value = decodeURIComponent(this.parameters?.v as string);
+    if (this.parameters?.id) this.id = this.parameters.id as string;
+    if (this.parameters?.sig) this.signature = decodeURIComponent(this.parameters?.sig as string);
 
-    if (this.parameters.f) {
-      this.fields = this.parameters.f.split(',')
+    if (this.parameters?.f) {
+      const f = this.parameters.f as string;
+      this.fields = f.split(',')
         .map((f) => {
           return decodeURIComponent(f);
         });
@@ -337,7 +371,7 @@ export const HeimdalId = class {
    * @param responseObject
    * @param action
    */
-  newResponse(serverUrl, responseObject, action = false) {
+  newResponse(serverUrl: string, responseObject: any, action = '') {
     return new HeimdalResponse(serverUrl, responseObject, action || this.action || DEFAULT_ACTION);
   }
 
@@ -348,7 +382,7 @@ export const HeimdalId = class {
    *
    * @param fields {array}
    */
-  createResponse(fields) {
+  createResponse(fields: string[]): ResponseBody {
     const response = new HeimdalResponse(this.getServerUrl(), {
       challenge: this.getChallenge(),
       time: moment().unix(),
@@ -359,7 +393,7 @@ export const HeimdalId = class {
       // create a signature from the loaded private key
       const message = response.getSigningMessage();
       response.signature = this.signMessage(message);
-      response.address = this.getAddress();
+      response.address = this.getAddress() || '';
 
       if (this.signData) {
         response.signed = this.getSignedData();
@@ -371,21 +405,29 @@ export const HeimdalId = class {
 
   /**
    * Verify whether the heimdal url is valid and has been signed properly (if applicable)
+   *
+   * @return boolean
    */
-  verifyRequest() {
+  verifyRequest(): boolean {
     if (this.protocol !== 'heimdal') return false;
     if (!this.authority) return false;
 
     if (this.signature) {
       const message = this.getSigningMessage();
 
-      return this.verifyMessage(message, this.id, this.signature);
+      return this.verifyMessage(message, this.id as string, this.signature);
     }
 
     return true;
   }
 
-  getSigningMessage() {
+  /**
+   * Get the message string to sign with the private key
+   *
+   * @throws Error on missing authority ot challenge
+   * @return string
+   */
+  getSigningMessage(): string {
     if (!this.authority) {
       throw new Error('Domain authority has not been set');
     }
@@ -413,7 +455,7 @@ export const HeimdalId = class {
    * Sign the set signData with the correct function
    */
   getSignedData() {
-    if (this.signData.message) {
+    if (this.signData?.message) {
       return {
         message: this.signData.message,
         signature: this.signMessage(this.signData.message),
@@ -421,14 +463,14 @@ export const HeimdalId = class {
       };
     }
 
-    if (this.signData.op_return) {
+    if (this.signData?.op_return) {
       return {
         algorithm: 'AIP',
         op_return: this.signOpReturn(this.signData.op_return),
       };
     }
 
-    if (this.signData.tx) {
+    if (this.signData?.tx) {
       return this.signTx(this.signData.tx);
     }
 
@@ -440,10 +482,13 @@ export const HeimdalId = class {
    *
    * @param opReturn
    */
-  signOpReturn(opReturn) {
+  signOpReturn(opReturn: string[]) {
     const aipMessageBuffer = this.getAIPMessageBuffer(opReturn);
+    // TODO is this correct ???
     const {
+      // @ts-ignore
       address,
+      // @ts-ignore
       signature,
     } = this.signMessage(aipMessageBuffer);
 
@@ -462,7 +507,7 @@ export const HeimdalId = class {
    * @param opReturn
    * @returns {Buffer}
    */
-  getAIPMessageBuffer(opReturn) {
+  getAIPMessageBuffer(opReturn: string[]) {
     const buffers = [];
     if (opReturn[0].replace('0x', '') !== '6a') {
       // include OP_RETURN in constructing the signature buffer
@@ -481,8 +526,10 @@ export const HeimdalId = class {
    * Sign the given Bitcoin transaction
    *
    * @param tx
+   *
+   * @return boolean
    */
-  signTx(tx) {
+  signTx(tx: string) {
     // TODO
     console.log(tx);
     // const transaction = bsv.Transaction.fromString(tx);
@@ -494,8 +541,10 @@ export const HeimdalId = class {
    * Sign a message with the private key of this instance
    *
    * @param message
+   *
+   * @return Signature Messages signature object ( { address, signature } )
    */
-  signMessage(message) {
+  signMessage(message: string | Buffer): string {
     const messageBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message);
     return Message(messageBuffer).sign(this.#privateKey);
   }
@@ -506,8 +555,10 @@ export const HeimdalId = class {
    * @param message {string} String message to verify the signature for
    * @param address {string} Bitcoin address
    * @param signature {string} Signature in base64
+   *
+   * @return boolean
    */
-  verifyMessage(message, address, signature) {
+  verifyMessage(message: string, address: string, signature: string) {
     try {
       return Message.verify(Buffer.from(message), address, signature);
     } catch (e) {

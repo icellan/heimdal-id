@@ -2,7 +2,7 @@
 // (c) Steven Levithan <stevenlevithan.com>
 // MIT License
 // http://blog.stevenlevithan.com/archives/parseuri
-export const parseUri = function (str) {
+export const parseUri = function (str: string): { [key: string]: string | number } {
   /* eslint-disable max-len */
   const o = {
     strictMode: false,
@@ -18,13 +18,18 @@ export const parseUri = function (str) {
   };
 
   const m = o.parser[o.strictMode ? 'strict' : 'loose'].exec(str);
-  const uri = {};
+  const uri: { [key: string]: any } = {};
   let i = 14;
 
-  while (i--) uri[o.key[i]] = m[i] || '';
+  while (i--) {
+    if (m) {
+      uri[o.key[i]] = m[i];
+    }
+  }
 
   uri[o.q.name] = {};
-  uri[o.key[12]].replace(o.q.parser, ($0, $1, $2) => {
+  uri[o.key[12]]?.replace(o.q.parser, ($0: any, $1: string | number, $2: any) => {
+    // @ts-ignore
     if ($1) uri[o.q.name][$1] = $2;
   });
 
@@ -34,7 +39,7 @@ export const parseUri = function (str) {
 // https://github.com/substack/json-stable-stringify/commit/e43ca2a1dcfc39bf1514684492767ef6040d1f3e
 // MIT License
 /* eslint-disable */
-export const jsonStableStringify = function (obj, opts) {
+export const jsonStableStringify = function (obj: any, opts: any | undefined) {
   if (!opts) opts = {};
   if (typeof opts === 'function') opts = { cmp: opts };
   let space = opts.space || '';
@@ -43,11 +48,11 @@ export const jsonStableStringify = function (obj, opts) {
   }
 
   const cycles = (typeof opts.cycles === 'boolean') ? opts.cycles : false;
-  const replacer = opts.replacer || function (key, value) { return value; };
+  const replacer = opts.replacer || function (key: string, value: any) { return value; };
 
   const cmp = opts.cmp && (function (f) {
-    return function (node) {
-      return function (a, b) {
+    return function (node: any) {
+      return function (a: any, b: any) {
         const aobj = {
           key: a,
           value: node[a],
@@ -61,8 +66,8 @@ export const jsonStableStringify = function (obj, opts) {
     };
   })(opts.cmp);
 
-  const seen = [];
-  return (function stringify(parent, key, node, level) {
+  const seen: any = [];
+  return (function stringify(parent: any, key: string | number, node: any, level: number): string | undefined {
     const indent = space ? ('\n' + new Array(level + 1).join(space)) : '';
     const colonSeparator = space ? ': ' : ':';
 

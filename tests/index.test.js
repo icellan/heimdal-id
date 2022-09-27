@@ -38,7 +38,7 @@ describe('basics', () => {
     expect(heimdalId.checksum).toBe('yoEY-qBV3');
     expect(heimdalId.protocol).toBe('heimdal');
     expect(heimdalId.host).toBe('demo.heimdal.app');
-    expect(heimdalId.port).toBe('');
+    expect(heimdalId.port).toBeUndefined();
     expect(heimdalId.authority).toBe('demo.heimdal.app');
     expect(heimdalId.challenge).toBe('F8mkHwQu8-B8SClgugXBY1hTsWhS6casjbNLjGTShYSBXItuVLNbJ1_NWCtNlw05');
     expect(heimdalId.type).toBe('api');
